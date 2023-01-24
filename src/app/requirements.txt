@@ -1,0 +1,5 @@
+SpeechRecognition==3.9.0
+pyTelegramBotAPI==4.8.0
+pydantic==1.10.2
+sanic[ext]==22.9.1
+aiohttp==3.8.3
