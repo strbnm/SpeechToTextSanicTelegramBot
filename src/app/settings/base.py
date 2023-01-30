@@ -2,7 +2,7 @@ from pydantic import BaseSettings, Field
 
 
 class SecuritySettings(BaseSettings):
-    SECRET_KEY: str = Field('Dft5&#jP)*^HbCv@', description='Секретный ключ приложения')
+    SECRET_KEY: str = Field(..., description='Секретный ключ приложения')
     TOKEN: str = Field(..., description='Токен телеграм-бота')
 
     class Config:
