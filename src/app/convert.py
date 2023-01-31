@@ -24,7 +24,6 @@ class Converter:
         self.wav_file = path_to_file.replace('.ogg', '.wav')
         subprocess.run(['ffmpeg', '-v', 'quiet', '-i', self.path_to_file, self.wav_file], check=True)
 
-
     def prepare_audio(self) -> sr.AudioData:
         """
         Метод подготовки аудио к дальнейшему распознаванию

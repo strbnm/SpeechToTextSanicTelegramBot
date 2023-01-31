@@ -95,9 +95,9 @@ async def get_audio_messages(message: types.Message):
         finally:
             del converter
 
-
         await bot.send_message(message.chat.id, message_text, reply_to_message_id=message.message_id)
         log.info('Quit from handler content types %s', message.content_type)
+
 
 @v1.post('/')
 async def handler_post(request: Request):
