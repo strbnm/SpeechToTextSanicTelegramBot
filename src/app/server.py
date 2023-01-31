@@ -1,7 +1,7 @@
 """
 Модуль приложения асинхронного телеграм-бота для преобразования голосовых сообщений в текстовые.
 """
-
+import logging
 import os
 
 import aiohttp
@@ -22,7 +22,7 @@ async def setup_client_session(app, _):
     app.ctx.client_session = aiohttp.ClientSession()
 
 
-@app.before_server_stop
+@app.after_server_stop
 async def close_client_session(app, _):
     await app.ctx.client_session.close()
 
@@ -42,9 +42,10 @@ async def start(message: types.Message):
     :param message: объект сообщения Telegram
     :return: None
     """
-
+    log.info('Handled command /start')
     welcome_mess = 'Привет! Отправляй голосовое, я расшифрую!'
     await bot.send_message(message.chat.id, welcome_mess)
+    log.info('Quit from handler start command')
 
 
 @bot.message_handler(content_types=['voice', 'video_note', 'audio'])
@@ -59,6 +60,7 @@ async def get_audio_messages(message: types.Message):
     :param message: Объект сообщения Telegram
     :return: None
     """
+    log.info('Handled content types %s', message.content_type)
     file_id = None
     match message.content_type:
         case 'voice':
@@ -67,6 +69,7 @@ async def get_audio_messages(message: types.Message):
             file_id = message.audio.file_id
         case 'video_note':
             file_id = message.video_note.file_id
+    log.info('File_id = %s', file_id)
     if file_id is not None:
         file_info = await bot.get_file(file_id)
         downloaded_file = await bot.download_file(file_info.file_path)
@@ -77,19 +80,24 @@ async def get_audio_messages(message: types.Message):
         converter = Converter(file_name)
         os.remove(file_name)
         audio = converter.prepare_audio()
+        log.info('Prepared audio for recognize')
         try:
             message_text = await converter.recognize_google(
                 session=app.ctx.client_session, audio_data=audio, language='ru-RU'
             )
-        except sr.UnknownValueError:
+            log.info('Get message from audio: %s', message_text)
+        except sr.UnknownValueError as err:
             message_text = 'Сообщение не может быть распознано, так как речь не разборчива'
-        except aiohttp.ClientError:
+            log.error('Error during recognize audio: %s', err, exc_info=True)
+        except aiohttp.ClientError as err:
             message_text = 'Сообщение не может быть распознано. Попробуйте еще раз через несколько секунд'
+            log.error('Error during recognize audio: %s', err, exc_info=True)
         finally:
             del converter
 
-        await bot.send_message(message.chat.id, message_text, reply_to_message_id=message.message_id)
 
+        await bot.send_message(message.chat.id, message_text, reply_to_message_id=message.message_id)
+        log.info('Quit from handler content types %s', message.content_type)
 
 @v1.post('/')
 async def handler_post(request: Request):
@@ -107,11 +115,20 @@ async def handler_post(request: Request):
     :return: Экземпляр ответа с текстом '!' в теле ответа
     """
     json_string = request.body.decode(encoding='utf-8')
+    log.info('Get web-hook request: %s', json_string)
     update = telebot.types.Update.de_json(json_string)
     request.app.add_task(bot.process_new_updates([update]))
+    log.info('Added background task with update: %s', update)
     return text('!')
 
 
 if __name__ == '__main__':
+    log = logging.getLogger('speech_to_text_async')
+    log.setLevel(logging.INFO)
+    sh = logging.StreamHandler()
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    sh.setFormatter(formatter)
+    log.addHandler(sh)
+
     app.run(host=settings.APP.HOST, port=int(os.environ.get('PORT', 5000)), workers=settings.APP.workers,
             debug=settings.DEBUG, access_log=True)

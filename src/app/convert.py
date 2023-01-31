@@ -3,6 +3,7 @@
 """
 
 import json
+import logging
 import os
 import subprocess
 from typing import Any
@@ -10,6 +11,8 @@ from urllib.parse import urlencode
 
 import aiohttp
 import speech_recognition as sr
+
+log = logging.getLogger('speech_to_text_async')
 
 
 class Converter:
@@ -28,6 +31,7 @@ class Converter:
 
         :return: AudioData
         """
+        log.info('Start prepared audio')
         recognizer = sr.Recognizer()
         with sr.AudioFile(self.wav_file) as source:
             audio = recognizer.record(source)
@@ -44,7 +48,7 @@ class Converter:
             show_all: bool = False,
     ) -> list[Any] | tuple[Any, Any] | Any:
         """
-        Асинхронная реализация метода распознавания recognize_google с использованием Google Speech Recognition API
+        Асинхронная адаптация метода распознавания recognize_google с использованием Google Speech Recognition API
 
         :param session: Экземпляр ClientSession aiohttp
 
@@ -67,7 +71,7 @@ class Converter:
         В противном случае возвращает необработанный ответ API в виде словаря JSON.
         Вызывает исключение `speech_recognition.UnknownValueError`, если речь неразборчива.
         """
-
+        log.info('Start recognize audio')
         assert isinstance(audio_data, sr.AudioData), '``audio_data`` must be audio data'
         assert key is None or isinstance(key, str), '``key`` must be ``None`` or a string'
         assert isinstance(language, str), '``language`` must be a string'
@@ -79,13 +83,15 @@ class Converter:
         if key is None:
             key = 'AIzaSyBOti4mM-6x9WDnZIjIeyEU21OpBXqWBgw'
         url_params = urlencode({'client': 'chromium', 'lang': language, 'key': key, 'pFilter': pfilter})
-        url = f'http://www.google.com/speech-api/v2/recognize?{url_params}'
+        url = f'https://www.google.com/speech-api/v2/recognize?{url_params}'
         async with session.post(
                 url,
                 data=flac_data,
                 headers={'Content-Type': f'audio/x-flac; rate={audio_data.sample_rate}'},
         ) as response:
             response_text = await response.text(encoding='utf-8')
+            log.info('Get response from Google Speech Recognition API: %s, status: %s',
+                     response_text.replace('\n', ' '), response.status)
 
         # ignore any blank blocks
         actual_result = []
@@ -110,8 +116,9 @@ class Converter:
             best_hypothesis = actual_result['alternative'][0]
         if 'transcript' not in best_hypothesis:
             raise sr.UnknownValueError()
-
+        log.info('Get result text: %s', best_hypothesis['transcript'])
         return best_hypothesis['transcript']
 
     def __del__(self):
         os.remove(self.wav_file)
+        log.info('Remove file: %s', self.wav_file)
